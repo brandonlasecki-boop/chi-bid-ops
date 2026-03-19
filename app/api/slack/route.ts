@@ -25,13 +25,26 @@ function verifySlackSignature(body: string, signature: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  const body = await req.text();
+
+  // Handle URL verification FIRST - Slack requires challenge response before anything else
+  try {
+    const parsed = JSON.parse(body) as { type?: string; challenge?: string };
+    if (parsed.type === 'url_verification' && typeof parsed.challenge === 'string') {
+      return new NextResponse(parsed.challenge, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+  } catch {
+    // Not JSON or not url_verification, continue
+  }
+
   if (!signingSecret || !token) {
     return NextResponse.json({ error: 'Slack not configured' }, { status: 503 });
   }
 
-  const body = await req.text();
   const signature = req.headers.get('x-slack-signature') ?? '';
-
   if (!verifySlackSignature(body, signature)) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
@@ -51,11 +64,6 @@ export async function POST(req: NextRequest) {
         bot_id?: string;
       };
     };
-
-    // URL verification (Events API setup)
-    if (payload.type === 'url_verification' && payload.challenge) {
-      return NextResponse.json({ challenge: payload.challenge });
-    }
 
     // Message event - check for form completion in thread replies
     if (payload.type === 'event_callback' && payload.event?.type === 'message') {
