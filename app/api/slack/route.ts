@@ -119,16 +119,18 @@ export async function POST(req: NextRequest) {
         console.log('[Slack] Skipping: no text or files in message');
         return NextResponse.json({ ok: true });
       }
-      {
-        const { processSlackMessageForFormCompletion } = await import('@/lib/slack');
-        processSlackMessageForFormCompletion(
+      console.log('[Slack] Processing thread_ts:', ev.thread_ts, 'text:', ev.text?.slice(0, 50), 'files:', evFiles?.map((f) => ({ id: f.id, hasUrl: !!(f.url_private_download ?? f.url_private) })));
+      const { processSlackMessageForFormCompletion } = await import('@/lib/slack');
+      try {
+        await processSlackMessageForFormCompletion(
           ev.thread_ts,
           ev.text ?? '',
           evFiles,
           token
-        )
-          .then(() => console.log('[Slack] Processed:', ev.thread_ts, ev.text?.slice(0, 50)))
-          .catch((err) => console.error('[Slack] Form completion error:', err));
+        );
+        console.log('[Slack] Processed:', ev.thread_ts, ev.text?.slice(0, 50));
+      } catch (err) {
+        console.error('[Slack] Form completion error:', err);
       }
     }
 
