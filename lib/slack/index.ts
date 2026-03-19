@@ -310,6 +310,7 @@ async function uploadSlackFileToForm(
     form_id: formId,
     file_url: urlData.publicUrl,
     file_name: fileName,
+    source: 'complete',
   });
   return true;
 }

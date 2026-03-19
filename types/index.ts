@@ -48,6 +48,7 @@ export interface Document {
   form_id: string;
   file_url: string;
   file_name: string;
+  source?: 'upload' | 'complete' | null;
   created_at: string;
 }
 

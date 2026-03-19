@@ -56,8 +56,8 @@ export async function getContractWithForms(id: string) {
   if (formsError) throw formsError;
 
   const formList = forms ?? [];
-  const { getDocumentsByFormIds } = await import('@/lib/db/documents');
-  const documentsByForm = await getDocumentsByFormIds(formList.map((f) => f.id));
+  const { getCompletedDocumentsByFormIds } = await import('@/lib/db/documents');
+  const documentsByForm = await getCompletedDocumentsByFormIds(formList.map((f) => f.id));
 
   return {
     ...contract,

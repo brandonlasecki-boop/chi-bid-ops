@@ -2,13 +2,13 @@
 
 import { revalidatePath } from 'next/cache';
 import { createServerClient } from '@/lib/supabase/server';
-import { createDocument, getDocumentById, getDocumentsByFormId } from '@/lib/db/documents';
+import { createDocument, getDocumentById, getUploadDocumentsByFormId } from '@/lib/db/documents';
 import { getFormById } from '@/lib/db/forms';
 
 const BUCKET = process.env.STORAGE_BUCKET ?? 'form-documents';
 
 export async function fetchDocuments(formId: string) {
-  return getDocumentsByFormId(formId);
+  return getUploadDocumentsByFormId(formId);
 }
 
 export async function uploadDocumentAction(formId: string, formData: FormData) {
@@ -48,6 +48,7 @@ export async function uploadDocumentAction(formId: string, formData: FormData) {
     form_id: formId,
     file_url: fileUrl,
     file_name: file.name,
+    source: 'upload',
   });
 
   revalidatePath(`/contracts/${form.contract_id}`);
