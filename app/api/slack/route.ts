@@ -4,10 +4,10 @@ import crypto from 'crypto';
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
 const token = process.env.SLACK_BOT_TOKEN;
 
-function verifySlackSignature(body: string, signature: string): boolean {
+function verifySlackSignature(body: string, timestamp: string, signature: string): boolean {
   if (!signingSecret || !signature) return false;
   try {
-    const sigBasestring = `v0:${body}`;
+    const sigBasestring = `v0:${timestamp}:${body}`;
     const mySig =
       'v0=' +
       crypto.createHmac('sha256', signingSecret).update(sigBasestring).digest('hex');
@@ -61,8 +61,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Slack not configured' }, { status: 503 });
   }
 
+  const timestamp = req.headers.get('x-slack-request-timestamp') ?? '';
   const signature = req.headers.get('x-slack-signature') ?? '';
-  if (!verifySlackSignature(body, signature)) {
+  if (!verifySlackSignature(body, timestamp, signature)) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
