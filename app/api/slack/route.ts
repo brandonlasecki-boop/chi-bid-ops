@@ -9,12 +9,19 @@ const signingSecret = process.env.SLACK_SIGNING_SECRET;
 const token = process.env.SLACK_BOT_TOKEN;
 
 function verifySlackSignature(body: string, signature: string): boolean {
-  if (!signingSecret) return false;
-  const sigBasestring = `v0:${body}`;
-  const mySig =
-    'v0=' +
-    crypto.createHmac('sha256', signingSecret).update(sigBasestring).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(mySig), Buffer.from(signature));
+  if (!signingSecret || !signature) return false;
+  try {
+    const sigBasestring = `v0:${body}`;
+    const mySig =
+      'v0=' +
+      crypto.createHmac('sha256', signingSecret).update(sigBasestring).digest('hex');
+    const a = Buffer.from(mySig, 'utf8');
+    const b = Buffer.from(signature, 'utf8');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(req: NextRequest) {
