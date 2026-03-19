@@ -22,6 +22,13 @@ function verifySlackSignature(body: string, signature: string): boolean {
 
 export const dynamic = 'force-dynamic';
 
+/** GET: manual test - hit this URL to verify logs appear in Vercel */
+export async function GET() {
+  const msg = `[Slack] GET /api/slack test at ${new Date().toISOString()}`;
+  console.log(msg);
+  return NextResponse.json({ ok: true, message: msg });
+}
+
 export async function POST(req: NextRequest) {
   let body: string;
   try {
