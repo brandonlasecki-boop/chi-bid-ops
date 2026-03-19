@@ -253,10 +253,69 @@ export async function requestFormInSlack(formId: string): Promise<{ ok: boolean;
   return { ok: true };
 }
 
-/** Parse a Slack thread message and mark matching forms as complete. Called from Events API. */
+interface SlackFile {
+  id?: string;
+  name?: string;
+  url_private_download?: string;
+  mimetype?: string;
+}
+
+/** Download a file from Slack and upload to a form. Requires files:read scope. */
+async function uploadSlackFileToForm(
+  formId: string,
+  file: SlackFile,
+  botToken: string
+): Promise<boolean> {
+  const url = file.url_private_download;
+  if (!url) return false;
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${botToken}` },
+  });
+  if (!res.ok) return false;
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const fileName = file.name || `slack-file-${file.id || Date.now()}`;
+  const ext = fileName.split('.').pop() || 'bin';
+
+  const { createServerClient } = await import('@/lib/supabase/server');
+  const { getFormById } = await import('@/lib/db/forms');
+  const { createDocument } = await import('@/lib/db/documents');
+
+  const form = await getFormById(formId).catch(() => null);
+  if (!form) return false;
+
+  const BUCKET = process.env.STORAGE_BUCKET ?? 'form-documents';
+  const supabase = createServerClient();
+  const path = `${form.contract_id}/${formId}/${crypto.randomUUID()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, buffer, {
+      contentType: file.mimetype || 'application/octet-stream',
+      upsert: false,
+    });
+
+  if (uploadError) {
+    console.error('[Slack] Storage upload error:', uploadError);
+    return false;
+  }
+
+  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  await createDocument({
+    form_id: formId,
+    file_url: urlData.publicUrl,
+    file_name: fileName,
+  });
+  return true;
+}
+
+/** Parse a Slack thread message: mark matching forms complete and upload any attached files. */
 export async function processSlackMessageForFormCompletion(
   threadTs: string,
-  text: string
+  text: string,
+  files?: SlackFile[],
+  botToken?: string
 ): Promise<void> {
   const { getContractBySlackThreadTs } = await import('@/lib/db/contracts');
   const { getFormsByContractId } = await import('@/lib/db/forms');
@@ -264,23 +323,33 @@ export async function processSlackMessageForFormCompletion(
   const { recalculateAndPersistProgress } = await import('@/lib/business/progress');
 
   const contract = await getContractBySlackThreadTs(threadTs);
-  if (!contract) return;
+  if (!contract) {
+    console.log('[Slack] No contract found for thread_ts:', threadTs);
+    return;
+  }
 
   const forms = await getFormsByContractId(contract.id);
-  const msg = text.toLowerCase();
+  console.log('[Slack] Processing for contract:', contract.title, 'forms:', forms.length, 'text:', text?.slice(0, 80));
+  const msg = (text || '').toLowerCase();
   const completionKeywords = ['complete', 'completed', 'done', 'finished'];
-
   const hasCompletionKeyword =
     completionKeywords.some((k) => msg.includes(k)) || text.includes('✅');
 
-  if (!hasCompletionKeyword) return;
-
   for (const form of forms) {
-    if (form.status === 'complete') continue;
     const formNameLower = form.name.toLowerCase();
-    if (msg.includes(formNameLower)) {
+    const matchesForm = msg.includes(formNameLower);
+
+    if (matchesForm && hasCompletionKeyword && form.status !== 'complete') {
       await updateFormStatus(form.id, 'complete');
       await recalculateAndPersistProgress(contract.id);
+    }
+
+    if (matchesForm && files?.length && botToken) {
+      for (const file of files) {
+        await uploadSlackFileToForm(form.id, file, botToken).catch((err) =>
+          console.error('[Slack] File upload error:', err)
+        );
+      }
     }
   }
 }
