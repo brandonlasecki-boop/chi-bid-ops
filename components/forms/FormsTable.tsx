@@ -123,7 +123,7 @@ export function FormsTable({ forms, contractId, assignees, documentsByForm = {},
             <th className="text-left py-3 px-4 font-medium text-slate-300">Status</th>
             <th className="text-left py-3 px-4 font-medium text-slate-300">Notes</th>
             <th className="text-left py-3 px-4 font-medium text-slate-300">Due Date</th>
-            <th className="text-left py-3 px-4 font-medium text-slate-300">Completed / Actions</th>
+            <th className="text-left py-3 px-4 font-medium text-slate-300">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -199,21 +199,6 @@ export function FormsTable({ forms, contractId, assignees, documentsByForm = {},
               <td className="py-3 px-4 text-slate-400">{formatDate(form.due_date)}</td>
               <td className="py-3 px-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  {form.status === 'complete' && (documentsByForm[form.id]?.length ?? 0) > 0 && (
-                    <div className="flex flex-wrap gap-x-3 gap-y-1">
-                      {documentsByForm[form.id].map((doc) => (
-                        <a
-                          key={doc.id}
-                          href={doc.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-emerald-400 hover:text-emerald-300 text-xs font-medium"
-                        >
-                          {doc.file_name}
-                        </a>
-                      ))}
-                    </div>
-                  )}
                   {form.status !== 'complete' && (
                     <button
                       type="button"
