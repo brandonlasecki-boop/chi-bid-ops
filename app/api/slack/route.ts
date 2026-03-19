@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return NextResponse.json({ error: 'Failed to read body' }, { status: 400 });
   }
+  console.log('[Slack] POST /api/slack received, body length:', body?.length ?? 0);
 
   if (!body) {
     return NextResponse.json({ error: 'Empty body' }, { status: 400 });
@@ -74,17 +75,41 @@ export async function POST(req: NextRequest) {
       };
     };
 
-    // Message event - check for form completion in thread replies
+    if (payload.type === 'event_callback') {
+      console.log('[Slack] Event received:', payload.event?.type, payload.event?.subtype);
+    }
+
+    // Message event - form completion + file upload in thread replies
     if (payload.type === 'event_callback' && payload.event?.type === 'message') {
-      const ev = payload.event;
-      // Skip bot messages, edits, deletes, and non-thread messages
-      if (ev.bot_id || ev.subtype) return NextResponse.json({ ok: true });
-      if (ev.thread_ts && ev.text?.trim()) {
-        // Process async - respond 200 immediately (Slack requires <3s)
+      const ev = payload.event as {
+        text?: string;
+        thread_ts?: string;
+        subtype?: string;
+        bot_id?: string;
+        channel?: string;
+        files?: Array<{ id?: string; name?: string; url_private_download?: string; mimetype?: string }>;
+      };
+      console.log('[Slack] Message event:', {
+        channel: ev.channel,
+        thread_ts: ev.thread_ts,
+        subtype: ev.subtype,
+        hasText: !!ev.text?.trim(),
+        fileCount: ev.files?.length ?? 0,
+      });
+      if (ev.bot_id) return NextResponse.json({ ok: true });
+      const skipSubtypes = ['bot_message', 'message_changed', 'message_deleted', 'message_reply'];
+      if (ev.subtype && skipSubtypes.includes(ev.subtype)) return NextResponse.json({ ok: true });
+      const hasContent = (ev.text?.trim() || '').length > 0 || (ev.files?.length ?? 0) > 0;
+      if (ev.thread_ts && hasContent) {
         const { processSlackMessageForFormCompletion } = await import('@/lib/slack');
-        processSlackMessageForFormCompletion(ev.thread_ts, ev.text).catch((err) =>
-          console.error('[Slack] Form completion processing error:', err)
-        );
+        processSlackMessageForFormCompletion(
+          ev.thread_ts,
+          ev.text ?? '',
+          ev.files,
+          token
+        )
+          .then(() => console.log('[Slack] Processed:', ev.thread_ts, ev.text?.slice(0, 50)))
+          .catch((err) => console.error('[Slack] Form completion error:', err));
       }
     }
 
