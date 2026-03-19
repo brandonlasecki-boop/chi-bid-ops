@@ -53,6 +53,7 @@ export interface Document {
 
 export interface ContractWithForms extends Contract {
   forms: Form[];
+  documentsByForm?: Record<string, Document[]>;
 }
 
 export const FORM_STATUS_PERCENT: Record<FormStatus, number> = {

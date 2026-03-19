@@ -77,7 +77,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ### Create a Slack App
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) → Create New App
-2. Add Bot Token Scopes: `chat:write`, `commands`, `users:read`, `users:read.email` (for @ mentions)
+2. Add Bot Token Scopes: `chat:write`, `commands`, `users:read`, `users:read.email` (for @ mentions), `files:read` (to grab completed forms from Slack)
 3. Enable Event Subscriptions:
    - Event Subscriptions → Enable Events → On
    - Request URL: `https://your-domain.com/api/slack`

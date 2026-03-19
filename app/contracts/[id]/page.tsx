@@ -7,6 +7,7 @@ import { ContractStatusBadge } from '@/components/ui/StatusBadge';
 import { FormsTable } from '@/components/forms/FormsTable';
 import { FormsSection } from '@/components/forms/FormsSection';
 import { SamDataSection } from '@/components/contracts/SamDataSection';
+import { DeleteContractButton } from '@/components/contracts/DeleteContractButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,9 +19,9 @@ function formatDate(d: string | null): string {
 export default async function ContractDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string }> | { id: string };
 }) {
-  const { id } = await params;
+  const { id } = await Promise.resolve(params);
   const [data, assigneesResult] = await Promise.all([
     fetchContractWithForms(id),
     fetchAssigneesAction().catch(() => []),
@@ -35,7 +36,7 @@ export default async function ContractDetailPage({
         href="/"
         className="text-sm text-slate-400 hover:text-slate-200 mb-6 inline-block"
       >
-        ← Back to Dashboard
+        ← Back
       </Link>
 
       <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-6 mb-8">
@@ -46,7 +47,10 @@ export default async function ContractDetailPage({
             </h1>
             <p className="text-slate-500 mt-1">{data.agency}</p>
           </div>
-          <ContractStatusBadge status={data.status} />
+          <div className="flex items-center gap-4">
+            <ContractStatusBadge status={data.status} />
+            <DeleteContractButton contractId={data.id} contractTitle={data.title} />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4 text-sm">
@@ -101,6 +105,7 @@ export default async function ContractDetailPage({
         contractId={data.id}
         forms={data.forms}
         assignees={assignees.map((a) => ({ id: a.id, name: a.name, email: a.email }))}
+        documentsByForm={data.documentsByForm ?? {}}
       />
     </div>
   );

@@ -8,7 +8,7 @@ import {
   updateFormNotesAction,
   requestFormInSlackAction,
 } from '@/app/actions/contracts';
-import type { Form, FormStatus } from '@/types';
+import type { Document, Form, FormStatus } from '@/types';
 
 export interface Assignee {
   id: string;
@@ -20,6 +20,7 @@ interface FormsTableProps {
   forms: Form[];
   contractId: string;
   assignees: Assignee[];
+  documentsByForm?: Record<string, Document[]>;
   onUploadClick: (form: Form) => void;
 }
 
@@ -47,7 +48,7 @@ function formatDateTime(d: string | null): string {
   });
 }
 
-export function FormsTable({ forms, contractId, assignees, onUploadClick }: FormsTableProps) {
+export function FormsTable({ forms, contractId, assignees, documentsByForm = {}, onUploadClick }: FormsTableProps) {
   const router = useRouter();
   const [updating, setUpdating] = useState<string | null>(null);
   const [slackSending, setSlackSending] = useState<string | null>(null);
@@ -122,7 +123,7 @@ export function FormsTable({ forms, contractId, assignees, onUploadClick }: Form
             <th className="text-left py-3 px-4 font-medium text-slate-300">Status</th>
             <th className="text-left py-3 px-4 font-medium text-slate-300">Notes</th>
             <th className="text-left py-3 px-4 font-medium text-slate-300">Due Date</th>
-            <th className="text-left py-3 px-4 font-medium text-slate-300">Actions</th>
+            <th className="text-left py-3 px-4 font-medium text-slate-300">Completed / Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -198,13 +199,30 @@ export function FormsTable({ forms, contractId, assignees, onUploadClick }: Form
               <td className="py-3 px-4 text-slate-400">{formatDate(form.due_date)}</td>
               <td className="py-3 px-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onUploadClick(form)}
-                    className="text-emerald-400 hover:text-emerald-300 text-xs font-medium"
-                  >
-                    Upload
-                  </button>
+                  {form.status === 'complete' && (documentsByForm[form.id]?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {documentsByForm[form.id].map((doc) => (
+                        <a
+                          key={doc.id}
+                          href={doc.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-emerald-400 hover:text-emerald-300 text-xs font-medium"
+                        >
+                          {doc.file_name}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {form.status !== 'complete' && (
+                    <button
+                      type="button"
+                      onClick={() => onUploadClick(form)}
+                      className="text-emerald-400 hover:text-emerald-300 text-xs font-medium"
+                    >
+                      Upload
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={(e) => handleRequestInSlack(form.id, e)}

@@ -32,9 +32,20 @@ export async function calculateContractProgress(contractId: string): Promise<num
  * Note: The DB trigger handles this automatically on form changes.
  * Use this for manual recalculation if needed.
  */
+/**
+ * Recalculate and persist contract progress.
+ * Progress only moves up; never decreases when forms are uncompleted.
+ */
 export async function recalculateAndPersistProgress(contractId: string): Promise<number> {
-  const progress = await calculateContractProgress(contractId);
+  const newProgress = await calculateContractProgress(contractId);
   const supabase = createServerClient();
+  const { data: contract } = await supabase
+    .from('contracts')
+    .select('progress')
+    .eq('id', contractId)
+    .single();
+  const currentProgress = (contract?.progress ?? 0) as number;
+  const progress = Math.max(currentProgress, newProgress);
   await supabase.from('contracts').update({ progress }).eq('id', contractId);
   return progress;
 }

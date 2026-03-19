@@ -12,9 +12,10 @@ interface FormsSectionProps {
   contractId: string;
   forms: Form[];
   assignees: Assignee[];
+  documentsByForm?: Record<string, import('@/types').Document[]>;
 }
 
-export function FormsSection({ contractId, forms, assignees }: FormsSectionProps) {
+export function FormsSection({ contractId, forms, assignees, documentsByForm = {} }: FormsSectionProps) {
   const [addFormOpen, setAddFormOpen] = useState(false);
   const [addAssigneeOpen, setAddAssigneeOpen] = useState(false);
   const [uploadForm, setUploadForm] = useState<Form | null>(null);
@@ -45,6 +46,7 @@ export function FormsSection({ contractId, forms, assignees }: FormsSectionProps
         forms={forms}
         contractId={contractId}
         assignees={assignees}
+        documentsByForm={documentsByForm}
         onUploadClick={(form) => setUploadForm(form)}
       />
 

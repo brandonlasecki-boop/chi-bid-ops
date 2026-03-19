@@ -7,14 +7,6 @@ export function Header() {
         <Link href="/" className="text-xl font-semibold text-slate-100">
           CHI Bid Ops
         </Link>
-        <nav className="flex gap-6">
-          <Link
-            href="/"
-            className="text-slate-400 hover:text-slate-100 transition-colors"
-          >
-            Dashboard
-          </Link>
-        </nav>
       </div>
     </header>
   );

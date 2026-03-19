@@ -55,9 +55,14 @@ export async function getContractWithForms(id: string) {
 
   if (formsError) throw formsError;
 
+  const formList = forms ?? [];
+  const { getDocumentsByFormIds } = await import('@/lib/db/documents');
+  const documentsByForm = await getDocumentsByFormIds(formList.map((f) => f.id));
+
   return {
     ...contract,
-    forms: forms ?? [],
+    forms: formList,
+    documentsByForm,
   };
 }
 
@@ -123,4 +128,10 @@ export async function updateContract(
 
 export async function updateContractSlackThread(id: string, slack_thread_ts: string) {
   return updateContract(id, { slack_thread_ts });
+}
+
+export async function deleteContract(id: string) {
+  const supabase = createServerClient();
+  const { error } = await supabase.from('contracts').delete().eq('id', id);
+  if (error) throw error;
 }

@@ -186,10 +186,6 @@ export async function requestFormInSlack(formId: string): Promise<{ ok: boolean;
     : '_No files yet_';
   const assignee = await getSlackMentionForEmail(slack, form.assigned_to);
 
-  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/contracts/${form.contract_id}`
-    : null;
-
   const msgLines = [
     `📋 *Form requested: ${form.name}*`,
     `Contract: ${contract.title} (${(contract as { display_id?: string | null }).display_id ?? contract.id}) | Due: ${new Date(contract.due_date).toLocaleDateString()}`,
@@ -208,16 +204,6 @@ export async function requestFormInSlack(formId: string): Promise<{ ok: boolean;
     },
   ];
 
-  if (dashboardUrl) {
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `<${dashboardUrl}|Open in Dashboard →>`,
-      },
-    });
-  }
-
   let threadTs = contract.slack_thread_ts;
 
   if (!threadTs) {
@@ -229,7 +215,7 @@ export async function requestFormInSlack(formId: string): Promise<{ ok: boolean;
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*Contract:* ${contract.title}\nA thread was created for form requests. Use the dashboard to manage forms.`,
+            text: `*Contract:* ${contract.title}\nA thread was created for form requests. Reply in this thread with form name + "complete" to mark forms done.`,
           },
         },
       ],
@@ -257,6 +243,7 @@ interface SlackFile {
   id?: string;
   name?: string;
   url_private_download?: string;
+  url_private?: string;
   mimetype?: string;
 }
 
@@ -266,8 +253,25 @@ async function uploadSlackFileToForm(
   file: SlackFile,
   botToken: string
 ): Promise<boolean> {
-  const url = file.url_private_download;
-  if (!url) return false;
+  let url = file.url_private_download ?? file.url_private;
+  if (!url && file.id) {
+    try {
+      const { WebClient } = await import('@slack/web-api');
+      const slack = new WebClient(botToken);
+      const res = await slack.files.info({ file: file.id });
+      const f = res.file as { url_private_download?: string; url_private?: string; name?: string; mimetype?: string };
+      url = f?.url_private_download ?? f?.url_private;
+      if (url && !file.name) (file as { name?: string }).name = f?.name;
+      if (!file.mimetype && f?.mimetype) (file as { mimetype?: string }).mimetype = f?.mimetype;
+    } catch (err) {
+      console.error('[Slack] files.info error:', err);
+      return false;
+    }
+  }
+  if (!url) {
+    console.error('[Slack] No download URL for file:', file.id, file.name);
+    return false;
+  }
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${botToken}` },

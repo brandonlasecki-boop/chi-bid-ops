@@ -54,6 +54,7 @@ BEGIN
     v_contract_id := NEW.contract_id;
   END IF;
 
+  -- Progress only moves up; never decreases when forms are uncompleted
   UPDATE contracts
   SET progress = calculate_contract_progress(v_contract_id)
   WHERE id = v_contract_id;

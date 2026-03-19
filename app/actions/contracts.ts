@@ -1,11 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getContracts, getContractWithForms, createContract } from '@/lib/db/contracts';
+import { getContracts, getContractWithForms, createContract, deleteContract } from '@/lib/db/contracts';
 import { updateForm, updateFormStatus, updateFormAssignment, updateFormNotes } from '@/lib/db/forms';
 import {
   notifySlackContractCreated,
-  notifySlackFormAssigned,
   notifySlackFormCompleted,
   requestFormInSlack,
 } from '@/lib/slack';
@@ -17,6 +16,12 @@ export async function fetchContracts() {
 
 export async function fetchContractWithForms(id: string) {
   return getContractWithForms(id);
+}
+
+export async function deleteContractAction(id: string) {
+  await deleteContract(id);
+  revalidatePath('/');
+  revalidatePath(`/contracts/${id}`);
 }
 
 export async function createContractAction(input: {
@@ -64,7 +69,6 @@ export async function updateFormStatusAction(formId: string, status: FormStatus)
 
 export async function updateFormAssignmentAction(formId: string, assignedTo: string | null) {
   const form = await updateFormAssignment(formId, assignedTo);
-  await notifySlackFormAssigned(form).catch(() => {});
   revalidatePath('/');
   revalidatePath(`/contracts/${form.contract_id}`);
   return form;
@@ -83,7 +87,6 @@ export async function updateFormAction(
 ) {
   const form = await updateForm(formId, updates);
   if (updates.status) await notifySlackFormCompleted(form).catch(() => {});
-  if (updates.assigned_to !== undefined) await notifySlackFormAssigned(form).catch(() => {});
   revalidatePath('/');
   revalidatePath(`/contracts/${form.contract_id}`);
   return form;

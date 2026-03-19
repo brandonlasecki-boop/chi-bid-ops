@@ -95,9 +95,10 @@ export async function POST(req: NextRequest) {
         subtype?: string;
         bot_id?: string;
         channel?: string;
-        files?: Array<{ id?: string; name?: string; url_private_download?: string; mimetype?: string }>;
+        files?: Array<{ id?: string; name?: string; url_private_download?: string; url_private?: string; mimetype?: string }>;
+        file?: { id?: string; name?: string; url_private_download?: string; url_private?: string; mimetype?: string };
       };
-      const evFiles = ev.files ?? ((ev as { file?: { id?: string; name?: string; url_private_download?: string; mimetype?: string } }).file ? [(ev as { file: { id?: string; name?: string; url_private_download?: string; mimetype?: string } }).file] : undefined);
+      const evFiles = ev.files ?? (ev.file ? [ev.file] : undefined);
       console.log('[Slack] Message event:', {
         channel: ev.channel,
         thread_ts: ev.thread_ts,

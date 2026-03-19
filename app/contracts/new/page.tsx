@@ -11,7 +11,7 @@ export default function NewContractPage() {
         href="/"
         className="text-sm text-slate-400 hover:text-slate-200 mb-6 inline-block"
       >
-        ← Back to Dashboard
+        ← Back
       </Link>
 
       <div className="max-w-xl">

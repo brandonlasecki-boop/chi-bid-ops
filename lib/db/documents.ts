@@ -25,6 +25,25 @@ export async function getDocumentsByFormId(formId: string) {
   return data as Document[];
 }
 
+export async function getDocumentsByFormIds(formIds: string[]): Promise<Record<string, Document[]>> {
+  if (formIds.length === 0) return {};
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .in('form_id', formIds)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  const byForm: Record<string, Document[]> = {};
+  for (const fid of formIds) byForm[fid] = [];
+  for (const doc of (data ?? []) as Document[]) {
+    if (!byForm[doc.form_id]) byForm[doc.form_id] = [];
+    byForm[doc.form_id].push(doc);
+  }
+  return byForm;
+}
+
 export async function createDocument(input: {
   form_id: string;
   file_url: string;
