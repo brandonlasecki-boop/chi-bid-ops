@@ -97,23 +97,33 @@ export async function POST(req: NextRequest) {
         channel?: string;
         files?: Array<{ id?: string; name?: string; url_private_download?: string; mimetype?: string }>;
       };
+      const evFiles = ev.files ?? ((ev as { file?: { id?: string; name?: string; url_private_download?: string; mimetype?: string } }).file ? [(ev as { file: { id?: string; name?: string; url_private_download?: string; mimetype?: string } }).file] : undefined);
       console.log('[Slack] Message event:', {
         channel: ev.channel,
         thread_ts: ev.thread_ts,
         subtype: ev.subtype,
         hasText: !!ev.text?.trim(),
-        fileCount: ev.files?.length ?? 0,
+        textPreview: ev.text?.slice(0, 60),
+        fileCount: evFiles?.length ?? 0,
       });
       if (ev.bot_id) return NextResponse.json({ ok: true });
       const skipSubtypes = ['bot_message', 'message_changed', 'message_deleted', 'message_reply'];
       if (ev.subtype && skipSubtypes.includes(ev.subtype)) return NextResponse.json({ ok: true });
-      const hasContent = (ev.text?.trim() || '').length > 0 || (ev.files?.length ?? 0) > 0;
-      if (ev.thread_ts && hasContent) {
+      const hasContent = (ev.text?.trim() || '').length > 0 || (evFiles?.length ?? 0) > 0;
+      if (!ev.thread_ts) {
+        console.log('[Slack] Skipping: no thread_ts (top-level message, not a thread reply)');
+        return NextResponse.json({ ok: true });
+      }
+      if (!hasContent) {
+        console.log('[Slack] Skipping: no text or files in message');
+        return NextResponse.json({ ok: true });
+      }
+      {
         const { processSlackMessageForFormCompletion } = await import('@/lib/slack');
         processSlackMessageForFormCompletion(
           ev.thread_ts,
           ev.text ?? '',
-          ev.files,
+          evFiles,
           token
         )
           .then(() => console.log('[Slack] Processed:', ev.thread_ts, ev.text?.slice(0, 50)))

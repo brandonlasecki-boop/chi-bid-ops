@@ -329,22 +329,29 @@ export async function processSlackMessageForFormCompletion(
   }
 
   const forms = await getFormsByContractId(contract.id);
-  console.log('[Slack] Processing for contract:', contract.title, 'forms:', forms.length, 'text:', text?.slice(0, 80));
+  console.log('[Slack] Processing for contract:', contract.title, 'forms:', forms.map((f) => f.name).join(', '), 'text:', JSON.stringify(text?.slice(0, 100)));
   const msg = (text || '').toLowerCase();
   const completionKeywords = ['complete', 'completed', 'done', 'finished'];
   const hasCompletionKeyword =
     completionKeywords.some((k) => msg.includes(k)) || text.includes('✅');
+
+  const matchedForms = forms.filter((f) => msg.includes(f.name.toLowerCase()));
+  if (forms.length > 0 && matchedForms.length === 0) {
+    console.log('[Slack] No form name matched in message. Form names:', forms.map((f) => f.name).join(', '));
+  }
 
   for (const form of forms) {
     const formNameLower = form.name.toLowerCase();
     const matchesForm = msg.includes(formNameLower);
 
     if (matchesForm && hasCompletionKeyword && form.status !== 'complete') {
+      console.log('[Slack] Marking form complete:', form.name);
       await updateFormStatus(form.id, 'complete');
       await recalculateAndPersistProgress(contract.id);
     }
 
     if (matchesForm && files?.length && botToken) {
+      console.log('[Slack] Uploading', files.length, 'file(s) to form:', form.name);
       for (const file of files) {
         await uploadSlackFileToForm(form.id, file, botToken).catch((err) =>
           console.error('[Slack] File upload error:', err)
