@@ -1,0 +1,98 @@
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+import {
+  getContractSummaryForSlack,
+  processSlackMessageForFormCompletion,
+} from '@/lib/slack';
+
+const signingSecret = process.env.SLACK_SIGNING_SECRET;
+const token = process.env.SLACK_BOT_TOKEN;
+
+function verifySlackSignature(body: string, signature: string): boolean {
+  if (!signingSecret) return false;
+  const sigBasestring = `v0:${body}`;
+  const mySig =
+    'v0=' +
+    crypto.createHmac('sha256', signingSecret).update(sigBasestring).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(mySig), Buffer.from(signature));
+}
+
+export async function POST(req: NextRequest) {
+  if (!signingSecret || !token) {
+    return NextResponse.json({ error: 'Slack not configured' }, { status: 503 });
+  }
+
+  const body = await req.text();
+  const signature = req.headers.get('x-slack-signature') ?? '';
+
+  if (!verifySlackSignature(body, signature)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+
+  const contentType = req.headers.get('content-type') ?? '';
+
+  // Events API sends JSON
+  if (contentType.includes('application/json')) {
+    const payload = JSON.parse(body) as {
+      type?: string;
+      challenge?: string;
+      event?: {
+        type?: string;
+        text?: string;
+        thread_ts?: string;
+        subtype?: string;
+        bot_id?: string;
+      };
+    };
+
+    // URL verification (Events API setup)
+    if (payload.type === 'url_verification' && payload.challenge) {
+      return NextResponse.json({ challenge: payload.challenge });
+    }
+
+    // Message event - check for form completion in thread replies
+    if (payload.type === 'event_callback' && payload.event?.type === 'message') {
+      const ev = payload.event;
+      // Skip bot messages, edits, deletes, and non-thread messages
+      if (ev.bot_id || ev.subtype) return NextResponse.json({ ok: true });
+      if (ev.thread_ts && ev.text?.trim()) {
+        // Process async - respond 200 immediately (Slack requires <3s)
+        processSlackMessageForFormCompletion(ev.thread_ts, ev.text).catch((err) =>
+          console.error('[Slack] Form completion processing error:', err)
+        );
+      }
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
+  // Slash commands send form-urlencoded
+  const params = Object.fromEntries(new URLSearchParams(body));
+
+  if (params.command === '/contract-status') {
+    const contractId = (params.text ?? '').trim().split(/\s+/)[0];
+
+    if (!contractId) {
+      return NextResponse.json({
+        response_type: 'ephemeral',
+        text: 'Usage: `/contract-status <contract-id>`',
+      });
+    }
+
+    const summary = await getContractSummaryForSlack(contractId);
+
+    if (!summary) {
+      return NextResponse.json({
+        response_type: 'ephemeral',
+        text: `Contract not found: ${contractId}`,
+      });
+    }
+
+    return NextResponse.json({
+      response_type: 'ephemeral',
+      text: summary,
+    });
+  }
+
+  return NextResponse.json({ ok: true });
+}
