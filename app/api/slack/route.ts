@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import {
-  getContractSummaryForSlack,
-  processSlackMessageForFormCompletion,
-} from '@/lib/slack';
 
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
 const token = process.env.SLACK_BOT_TOKEN;
@@ -24,20 +20,33 @@ function verifySlackSignature(body: string, signature: string): boolean {
   }
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
-  const body = await req.text();
+  let body: string;
+  try {
+    body = await req.text();
+  } catch (err) {
+    return NextResponse.json({ error: 'Failed to read body' }, { status: 400 });
+  }
+
+  if (!body) {
+    return NextResponse.json({ error: 'Empty body' }, { status: 400 });
+  }
 
   // Handle URL verification FIRST - Slack requires challenge response before anything else
-  try {
-    const parsed = JSON.parse(body) as { type?: string; challenge?: string };
-    if (parsed.type === 'url_verification' && typeof parsed.challenge === 'string') {
-      return new NextResponse(parsed.challenge, {
-        status: 200,
-        headers: { 'Content-Type': 'text/plain' },
-      });
+  if (body && body.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(body) as { type?: string; challenge?: string };
+      if (parsed.type === 'url_verification' && typeof parsed.challenge === 'string') {
+        return new NextResponse(parsed.challenge, {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      }
+    } catch {
+      // Not valid JSON or not url_verification, continue
     }
-  } catch {
-    // Not JSON or not url_verification, continue
   }
 
   if (!signingSecret || !token) {
@@ -72,6 +81,7 @@ export async function POST(req: NextRequest) {
       if (ev.bot_id || ev.subtype) return NextResponse.json({ ok: true });
       if (ev.thread_ts && ev.text?.trim()) {
         // Process async - respond 200 immediately (Slack requires <3s)
+        const { processSlackMessageForFormCompletion } = await import('@/lib/slack');
         processSlackMessageForFormCompletion(ev.thread_ts, ev.text).catch((err) =>
           console.error('[Slack] Form completion processing error:', err)
         );
@@ -94,6 +104,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const { getContractSummaryForSlack } = await import('@/lib/slack');
     const summary = await getContractSummaryForSlack(contractId);
 
     if (!summary) {
