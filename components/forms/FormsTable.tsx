@@ -115,15 +115,25 @@ export function FormsTable({ forms, contractId, assignees, documentsByForm = {},
 
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-700">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm table-fixed min-w-[900px]">
+        <colgroup>
+          <col className="w-[140px]" />
+          <col className="w-[140px]" />
+          <col className="w-[100px]" />
+          <col className="w-[180px]" />
+          <col className="w-[80px]" />
+          <col className="w-[200px]" />
+          <col className="w-[140px]" />
+        </colgroup>
         <thead>
           <tr className="border-b border-slate-700 bg-slate-800/50">
-            <th className="text-left py-3 px-4 font-medium text-slate-300">Name</th>
-            <th className="text-left py-3 px-4 font-medium text-slate-300">Assigned To</th>
-            <th className="text-left py-3 px-4 font-medium text-slate-300">Status</th>
-            <th className="text-left py-3 px-4 font-medium text-slate-300">Notes</th>
-            <th className="text-left py-3 px-4 font-medium text-slate-300">Due Date</th>
-            <th className="text-left py-3 px-4 font-medium text-slate-300">Actions</th>
+            <th className="text-left py-3 px-3 font-medium text-slate-300">Name</th>
+            <th className="text-left py-3 px-3 font-medium text-slate-300">Assigned</th>
+            <th className="text-left py-3 px-3 font-medium text-slate-300">Status</th>
+            <th className="text-left py-3 px-3 font-medium text-slate-300">Notes</th>
+            <th className="text-left py-3 px-3 font-medium text-slate-300">Due</th>
+            <th className="text-left py-3 px-3 font-medium text-slate-300">Completed</th>
+            <th className="text-left py-3 px-3 font-medium text-slate-300">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -142,7 +152,7 @@ export function FormsTable({ forms, contractId, assignees, documentsByForm = {},
                   <p className="text-xs text-slate-500 mt-0.5">{form.description}</p>
                 )}
               </td>
-              <td className="py-3 px-4">
+              <td className="py-3 px-3">
                 <select
                   value={
                     form.assigned_to
@@ -154,7 +164,7 @@ export function FormsTable({ forms, contractId, assignees, documentsByForm = {},
                     handleAssignmentChange(form.id, v || null);
                   }}
                   disabled={!!updating}
-                  className="w-44 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
+                  className="w-full max-w-[130px] bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
                 >
                   <option value="">Unassigned</option>
                   {assignees.map((a) => (
@@ -180,7 +190,7 @@ export function FormsTable({ forms, contractId, assignees, documentsByForm = {},
                   ))}
                 </select>
               </td>
-              <td className="py-3 px-4">
+              <td className="py-3 px-3">
                 <textarea
                   value={editingNotes[form.id] ?? form.notes ?? ''}
                   onChange={(e) =>
@@ -193,21 +203,36 @@ export function FormsTable({ forms, contractId, assignees, documentsByForm = {},
                   disabled={!!updating}
                   placeholder="Add notes…"
                   rows={2}
-                  className="w-full min-w-[140px] max-w-[200px] bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 resize-none"
+                  className="w-full min-w-0 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 resize-none"
                 />
               </td>
-              <td className="py-3 px-4 text-slate-400">{formatDate(form.due_date)}</td>
-              <td className="py-3 px-4">
+              <td className="py-3 px-3 text-slate-400 text-xs whitespace-nowrap">{formatDate(form.due_date)}</td>
+              <td className="py-3 px-3">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                  {(documentsByForm[form.id]?.length ?? 0) > 0 &&
+                    documentsByForm[form.id].map((doc) => (
+                      <a
+                        key={doc.id}
+                        href={doc.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-400 hover:text-emerald-300 text-xs font-medium truncate max-w-[120px]"
+                        title={doc.file_name}
+                      >
+                        {doc.file_name}
+                      </a>
+                    ))}
+                  <button
+                    type="button"
+                    onClick={() => onUploadClick(form)}
+                    className="text-emerald-400 hover:text-emerald-300 text-xs font-medium shrink-0"
+                  >
+                    Upload
+                  </button>
+                </div>
+              </td>
+              <td className="py-3 px-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  {form.status !== 'complete' && (
-                    <button
-                      type="button"
-                      onClick={() => onUploadClick(form)}
-                      className="text-emerald-400 hover:text-emerald-300 text-xs font-medium"
-                    >
-                      Upload
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={(e) => handleRequestInSlack(form.id, e)}

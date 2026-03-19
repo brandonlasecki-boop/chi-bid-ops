@@ -20,37 +20,8 @@ export function FormsSection({ contractId, forms, assignees, documentsByForm = {
   const [addAssigneeOpen, setAddAssigneeOpen] = useState(false);
   const [uploadForm, setUploadForm] = useState<Form | null>(null);
 
-  const completedForms = forms.filter((f) => f.status === 'complete' && (documentsByForm[f.id]?.length ?? 0) > 0);
-
   return (
-    <section>
-      {completedForms.length > 0 && (
-        <div className="mb-8 rounded-lg border border-emerald-700/50 bg-emerald-950/20 p-6">
-          <h2 className="text-lg font-medium text-emerald-200 mb-4">Completed</h2>
-          <div className="space-y-4">
-            {completedForms.map((form) => (
-              <div key={form.id} className="flex flex-wrap items-center gap-3">
-                <span className="font-medium text-slate-100">{form.name}</span>
-                <span className="text-slate-500">—</span>
-                <div className="flex flex-wrap gap-2">
-                  {documentsByForm[form.id].map((doc) => (
-                    <a
-                      key={doc.id}
-                      href={doc.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-emerald-400 hover:text-emerald-300 text-sm font-medium"
-                    >
-                      {doc.file_name}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
+    <section className="mt-8">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-medium text-slate-200">Forms</h2>
         <div className="flex gap-2">

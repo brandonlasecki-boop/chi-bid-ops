@@ -16,6 +16,7 @@ export async function uploadDocumentAction(formId: string, formData: FormData) {
   if (!file || file.size === 0) {
     throw new Error('No file selected');
   }
+  const asCompleted = formData.get('asCompleted') === 'true';
 
   const form = await getFormById(formId);
   if (!form) throw new Error('Form not found');
@@ -48,7 +49,7 @@ export async function uploadDocumentAction(formId: string, formData: FormData) {
     form_id: formId,
     file_url: fileUrl,
     file_name: file.name,
-    source: 'upload',
+    source: asCompleted ? 'complete' : 'upload',
   });
 
   revalidatePath(`/contracts/${form.contract_id}`);

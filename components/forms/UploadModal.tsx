@@ -31,6 +31,7 @@ export function UploadModal({
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [asCompleted, setAsCompleted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -71,6 +72,15 @@ export function UploadModal({
   return (
     <Modal open={open} onClose={onClose} title={`Upload — ${formName}`}>
       <div className="space-y-4">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={asCompleted}
+            onChange={(e) => setAsCompleted(e.target.checked)}
+            className="rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
+          />
+          <span className="text-sm text-slate-300">Mark as completed</span>
+        </label>
         <div>
           <input
             ref={fileInputRef}
