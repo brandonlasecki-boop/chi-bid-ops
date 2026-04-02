@@ -23,14 +23,17 @@ function formatStatus(s: string): string {
 }
 
 interface ContractStatusBadgeProps {
-  status: ContractStatus;
+  /** DB may return unexpected strings; unknown values fall back to intake styling */
+  status: ContractStatus | string;
   className?: string;
 }
 
 export function ContractStatusBadge({ status, className = '' }: ContractStatusBadgeProps) {
+  const style =
+    status in CONTRACT_STYLES ? CONTRACT_STYLES[status as ContractStatus] : CONTRACT_STYLES.intake;
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${CONTRACT_STYLES[status]} ${className}`}
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${style} ${className}`}
     >
       {formatStatus(status)}
     </span>

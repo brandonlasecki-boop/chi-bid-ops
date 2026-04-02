@@ -21,6 +21,15 @@ export interface Contract {
   status: ContractStatus;
   progress: number;
   slack_thread_ts: string | null;
+  slack_channel_id: string | null;
+  slack_project_seq: number | null;
+  opportunity_number: number | null;
+  naics: string | null;
+  opportunity_type: string | null;
+  service_area: string | null;
+  prospect_contractors: string | null;
+  key_personnel: string | null;
+  equipment_notes: string | null;
   sam_notice_id: string | null;
   solicitation_number: string | null;
   sam_url: string | null;

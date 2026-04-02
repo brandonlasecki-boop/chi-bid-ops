@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { fetchContracts } from '@/app/actions/contracts';
 import type { Contract } from '@/types';
-
-export const dynamic = 'force-dynamic';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ContractStatusBadge } from '@/components/ui/StatusBadge';
+
+export const dynamic = 'force-dynamic';
 
 function formatDate(d: string): string {
   return new Date(d).toLocaleDateString();
@@ -25,20 +25,6 @@ export default async function DashboardPage() {
     contracts = [];
   }
 
-  if (dbError) {
-    return (
-      <div className="rounded-lg border border-amber-600/50 bg-amber-950/30 p-6">
-        <h2 className="text-lg font-semibold text-amber-200 mb-2">Can&apos;t connect to database</h2>
-        <p className="text-amber-200/80 text-sm mb-4">{dbError}</p>
-        <ul className="text-sm text-slate-400 space-y-1 list-disc list-inside">
-          <li>Check <code className="bg-slate-800 px-1 rounded">.env.local</code> has correct Supabase URL and keys</li>
-          <li>Run migrations in Supabase SQL Editor: <code className="bg-slate-800 px-1 rounded">001_initial_schema.sql</code> and <code className="bg-slate-800 px-1 rounded">002_progress_function.sql</code></li>
-          <li>If tables exist, check Supabase project is not paused</li>
-        </ul>
-      </div>
-    );
-  }
-
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -51,7 +37,23 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {contracts.length === 0 ? (
+      {dbError && (
+        <div className="rounded-lg border border-amber-600/50 bg-amber-950/30 p-6 mb-8">
+          <h2 className="text-lg font-semibold text-amber-200 mb-2">Can&apos;t load contracts from database</h2>
+          <p className="text-amber-200/80 text-sm mb-4">{dbError}</p>
+          <p className="text-sm text-slate-400 mb-3">
+            You can still open <Link href="/contracts/new" className="text-emerald-400 hover:underline">New project / contract</Link> if the
+            database is only partially unavailable — saving will fail until the connection is fixed.
+          </p>
+          <ul className="text-sm text-slate-400 space-y-1 list-disc list-inside">
+            <li>Check <code className="bg-slate-800 px-1 rounded">.env.local</code> has correct Supabase URL and keys</li>
+            <li>Run migrations in Supabase SQL Editor: <code className="bg-slate-800 px-1 rounded">001_initial_schema.sql</code> and <code className="bg-slate-800 px-1 rounded">002_progress_function.sql</code></li>
+            <li>If tables exist, check Supabase project is not paused</li>
+          </ul>
+        </div>
+      )}
+
+      {!dbError && contracts.length === 0 ? (
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-12 text-center">
           <p className="text-slate-400 mb-4">No contracts yet.</p>
           <Link
@@ -61,7 +63,7 @@ export default async function DashboardPage() {
             Create Contract
           </Link>
         </div>
-      ) : (
+      ) : !dbError ? (
         <div className="space-y-4">
           {contracts.map((contract) => (
             <Link
@@ -88,12 +90,14 @@ export default async function DashboardPage() {
                 </div>
               </div>
               <div className="mt-4">
-                <ProgressBar value={contract.progress} />
+                <ProgressBar
+                  value={Number.isFinite(Number(contract.progress)) ? Number(contract.progress) : 0}
+                />
               </div>
             </Link>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

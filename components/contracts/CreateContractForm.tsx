@@ -4,7 +4,14 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchSamDataAction } from '@/app/actions/sam';
 
+export interface ProjectAssigneeOption {
+  id: string;
+  name: string;
+  email: string;
+}
+
 interface CreateContractFormProps {
+  assignees?: ProjectAssigneeOption[];
   action: (input: {
     title: string;
     agency: string;
@@ -14,16 +21,23 @@ interface CreateContractFormProps {
     sam_url?: string | null;
     sam_data?: Record<string, unknown> | null;
     create_thread?: boolean;
+    create_project?: boolean;
     notes?: string | null;
+    invite_assignee_ids?: string[];
+    opportunity_number?: number | null;
+    naics?: string | null;
+    opportunity_type?: string | null;
+    service_area?: string | null;
+    prospect_contractors?: string | null;
+    key_personnel?: string | null;
+    equipment_notes?: string | null;
   }) => Promise<{ id: string }>;
 }
 
-// Extract notice ID from SAM.gov URL or return as-is if it's already a raw ID
 function parseSamUrlOrId(input: string): { noticeId: string | null; url: string } {
   const trimmed = input?.trim() || '';
   if (!trimmed) return { noticeId: null, url: '' };
 
-  // Match SAM.gov URL patterns: .../opp/{id}/view or .../opp/{id}
   const match = trimmed.match(/\/opp\/([a-f0-9-]{20,})/i);
   if (match) {
     const noticeId = match[1];
@@ -33,7 +47,6 @@ function parseSamUrlOrId(input: string): { noticeId: string | null; url: string 
     };
   }
 
-  // Raw notice ID (32 hex chars)
   if (/^[a-f0-9-]{20,}$/i.test(trimmed)) {
     return {
       noticeId: trimmed,
@@ -44,13 +57,23 @@ function parseSamUrlOrId(input: string): { noticeId: string | null; url: string 
   return { noticeId: null, url: trimmed.startsWith('http') ? trimmed : '' };
 }
 
-export function CreateContractForm({ action }: CreateContractFormProps) {
+export function CreateContractForm({ action, assignees = [] }: CreateContractFormProps) {
   const [isPending, startTransition] = useTransition();
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [samData, setSamData] = useState<Record<string, unknown> | null>(null);
+  const [inviteIds, setInviteIds] = useState<Set<string>>(new Set());
   const router = useRouter();
+
+  function toggleInvite(id: string) {
+    setInviteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function handleFetchDetails() {
     const input = document.getElementById('sam_url') as HTMLInputElement;
@@ -101,10 +124,12 @@ export function CreateContractForm({ action }: CreateContractFormProps) {
       ? parseSamUrlOrId(samInput)
       : { noticeId: null, url: '' };
     const solicitation_number = (formData.get('solicitation_number') as string)?.trim() || null;
-    // FormData doesn't include submit button with preventDefault - use submitter
     const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | undefined;
     const submitType = submitter?.value ?? (formData.get('submit_type') as string);
     const notes = (formData.get('notes') as string)?.trim() || null;
+
+    const oppRaw = (formData.get('opportunity_number') as string)?.trim();
+    const opportunity_number = oppRaw ? parseInt(oppRaw, 10) : null;
 
     if (!title || !agency || !due_date) return;
 
@@ -115,8 +140,18 @@ export function CreateContractForm({ action }: CreateContractFormProps) {
       sam_notice_id: sam_notice_id || null,
       solicitation_number,
       sam_url: sam_url || null,
+      sam_data: samData,
       create_thread: submitType === 'create_and_thread',
+      create_project: submitType === 'create_project',
       notes,
+      invite_assignee_ids: submitType === 'create_project' ? Array.from(inviteIds) : undefined,
+      opportunity_number: Number.isFinite(opportunity_number as number) ? opportunity_number : null,
+      naics: (formData.get('naics') as string)?.trim() || null,
+      opportunity_type: (formData.get('opportunity_type') as string)?.trim() || null,
+      service_area: (formData.get('service_area') as string)?.trim() || null,
+      prospect_contractors: (formData.get('prospect_contractors') as string)?.trim() || null,
+      key_personnel: (formData.get('key_personnel') as string)?.trim() || null,
+      equipment_notes: (formData.get('equipment_notes') as string)?.trim() || null,
     };
 
     setSubmitError(null);
@@ -133,13 +168,13 @@ export function CreateContractForm({ action }: CreateContractFormProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-lg border border-slate-700 bg-slate-900/50 p-6 space-y-4"
+      className="rounded-lg border border-slate-700 bg-slate-900/50 p-6 space-y-6"
     >
       <div className="space-y-4">
         <h3 className="text-sm font-medium text-slate-400">SAM.gov</h3>
         <div>
           <label htmlFor="sam_url" className="block text-sm font-medium text-slate-300 mb-1">
-            SAM.gov URL <span className="text-slate-500">(paste link, then fetch details)</span>
+            SAM.gov URL <span className="text-slate-500">(optional — paste link, then fetch details)</span>
           </label>
           <div className="flex gap-2">
             <input
@@ -222,26 +257,152 @@ export function CreateContractForm({ action }: CreateContractFormProps) {
       <hr className="border-slate-700" />
 
       <div className="space-y-4">
-        <h3 className="text-sm font-medium text-slate-400">Slack thread (optional)</h3>
+        <h3 className="text-sm font-medium text-slate-400">Opportunity details (for Slack first post)</h3>
+        <p className="text-xs text-slate-500">
+          Used when you create a Slack project channel. All optional except what you need in the announcement.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="opportunity_number" className="block text-sm font-medium text-slate-300 mb-1">
+              Opportunity #
+            </label>
+            <input
+              id="opportunity_number"
+              name="opportunity_number"
+              type="number"
+              min={1}
+              className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="e.g. 2"
+            />
+          </div>
+          <div>
+            <label htmlFor="naics" className="block text-sm font-medium text-slate-300 mb-1">
+              NAICS
+            </label>
+            <input
+              id="naics"
+              name="naics"
+              type="text"
+              className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="e.g. 621399"
+            />
+          </div>
+        </div>
         <div>
-          <label htmlFor="notes" className="block text-sm font-medium text-slate-300 mb-1">
-            Notes <span className="text-slate-500">(included when creating a thread)</span>
+          <label htmlFor="opportunity_type" className="block text-sm font-medium text-slate-300 mb-1">
+            Contract opportunity type
+          </label>
+          <input
+            id="opportunity_type"
+            name="opportunity_type"
+            type="text"
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            placeholder="e.g. Solicitation"
+          />
+        </div>
+        <div>
+          <label htmlFor="service_area" className="block text-sm font-medium text-slate-300 mb-1">
+            Service area
           </label>
           <textarea
-            id="notes"
-            name="notes"
-            rows={3}
-            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-            placeholder="Add notes to include in the initial Slack post..."
+            id="service_area"
+            name="service_area"
+            rows={2}
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y min-h-[60px]"
+            placeholder="Location / coverage"
+          />
+        </div>
+        <div>
+          <label htmlFor="prospect_contractors" className="block text-sm font-medium text-slate-300 mb-1">
+            Prospect contractor
+          </label>
+          <input
+            id="prospect_contractors"
+            name="prospect_contractors"
+            type="text"
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            placeholder="e.g. CHI (Primary) and AZ Med (subcontractor)"
+          />
+        </div>
+        <div>
+          <label htmlFor="key_personnel" className="block text-sm font-medium text-slate-300 mb-1">
+            Key personnel
+          </label>
+          <textarea
+            id="key_personnel"
+            name="key_personnel"
+            rows={4}
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y min-h-[80px]"
+            placeholder="Staffing summary, roles…"
+          />
+        </div>
+        <div>
+          <label htmlFor="equipment_notes" className="block text-sm font-medium text-slate-300 mb-1">
+            Equipment / technology
+          </label>
+          <textarea
+            id="equipment_notes"
+            name="equipment_notes"
+            rows={6}
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y min-h-[120px]"
+            placeholder="Monitoring equipment, software, connectivity…"
           />
         </div>
       </div>
 
-      {submitError && (
-        <p className="text-rose-400 text-sm">{submitError}</p>
-      )}
+      <hr className="border-slate-700" />
 
-      <div className="pt-2 flex gap-3">
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium text-slate-400">Slack project channel</h3>
+        <p className="text-xs text-slate-500">
+          Creates channel <code className="bg-slate-800 px-1 rounded">chi-contract-001</code>,{' '}
+          <code className="bg-slate-800 px-1 rounded">chi-contract-002</code>, … and posts the opportunity. Select
+          teammates to invite (must use workspace email in Assignees).
+        </p>
+        {assignees.length === 0 ? (
+          <p className="text-sm text-amber-200/80">
+            No assignees yet. Add people under a contract’s <strong>+ Add Assignee</strong> first, or create the
+            project without invites and add people in Slack.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-3">
+            {assignees.map((a) => (
+              <label key={a.id} className="flex items-center gap-2 cursor-pointer text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={inviteIds.has(a.id)}
+                  onChange={() => toggleInvite(a.id)}
+                  className="rounded border-slate-600 bg-slate-800 text-emerald-500"
+                />
+                <span>{a.name}</span>
+                <span className="text-slate-500 text-xs">({a.email})</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <hr className="border-slate-700" />
+
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium text-slate-400">Legacy Slack (optional)</h3>
+        <div>
+          <label htmlFor="notes" className="block text-sm font-medium text-slate-300 mb-1">
+            Notes <span className="text-slate-500">(only for “thread in shared channel”)</span>
+          </label>
+          <textarea
+            id="notes"
+            name="notes"
+            rows={2}
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+            placeholder="Extra text for the old single-channel thread…"
+          />
+        </div>
+      </div>
+
+      {submitError && <p className="text-rose-400 text-sm">{submitError}</p>}
+
+      <div className="pt-2 flex flex-col sm:flex-row gap-3">
         <button
           type="submit"
           name="submit_type"
@@ -249,16 +410,25 @@ export function CreateContractForm({ action }: CreateContractFormProps) {
           disabled={isPending}
           className="flex-1 py-2.5 bg-slate-600 hover:bg-slate-500 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
         >
-          {isPending ? 'Creating...' : 'Create'}
+          {isPending ? 'Creating...' : 'Create only'}
+        </button>
+        <button
+          type="submit"
+          name="submit_type"
+          value="create_project"
+          disabled={isPending}
+          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+        >
+          {isPending ? 'Creating...' : 'Create project + Slack channel'}
         </button>
         <button
           type="submit"
           name="submit_type"
           value="create_and_thread"
           disabled={isPending}
-          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+          className="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 font-medium rounded-lg transition-colors text-sm"
         >
-          {isPending ? 'Creating...' : 'Create and start thread'}
+          {isPending ? 'Creating...' : 'Create + thread (shared channel)'}
         </button>
       </div>
     </form>

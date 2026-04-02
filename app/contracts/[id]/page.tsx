@@ -4,10 +4,10 @@ import { fetchContractWithForms } from '@/app/actions/contracts';
 import { fetchAssigneesAction } from '@/app/actions/assignees';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ContractStatusBadge } from '@/components/ui/StatusBadge';
-import { FormsTable } from '@/components/forms/FormsTable';
 import { FormsSection } from '@/components/forms/FormsSection';
 import { SamDataSection } from '@/components/contracts/SamDataSection';
 import { DeleteContractButton } from '@/components/contracts/DeleteContractButton';
+import { mapDocumentsByFormForClient, mapFormForClient, toClientJson } from '@/lib/serialize';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,14 +21,52 @@ export default async function ContractDetailPage({
 }: {
   params: Promise<{ id: string }> | { id: string };
 }) {
-  const { id } = await Promise.resolve(params);
-  const [data, assigneesResult] = await Promise.all([
-    fetchContractWithForms(id),
-    fetchAssigneesAction().catch(() => []),
-  ]);
+  const resolved = await Promise.resolve(params);
+  const id = typeof resolved?.id === 'string' ? resolved.id.trim() : '';
+  if (!id) notFound();
+
+  let data: Awaited<ReturnType<typeof fetchContractWithForms>>;
+  try {
+    data = await fetchContractWithForms(id);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to load contract';
+    return (
+      <div className="rounded-lg border border-rose-700/50 bg-rose-950/30 p-6">
+        <h1 className="text-lg font-semibold text-rose-200 mb-2">Could not load this contract</h1>
+        <p className="text-sm text-rose-200/90 mb-4">{message}</p>
+        <p className="text-sm text-slate-400 mb-4">
+          Common causes: missing or invalid <code className="bg-slate-800 px-1 rounded">SUPABASE_SERVICE_ROLE_KEY</code> on
+          the server, a database error, or a migration that has not been applied.
+        </p>
+        <Link href="/" className="text-emerald-400 hover:underline text-sm">
+          ← Back to contracts
+        </Link>
+      </div>
+    );
+  }
 
   if (!data) notFound();
-  const assignees = assigneesResult ?? [];
+  const assignees = (await fetchAssigneesAction().catch(() => [])) ?? [];
+
+  let samDataForClient: Record<string, unknown> | null = null;
+  if (data.sam_data && typeof data.sam_data === 'object') {
+    try {
+      samDataForClient = toClientJson(data.sam_data);
+    } catch {
+      samDataForClient = null;
+    }
+  }
+
+  const progressValue = Number(data.progress ?? 0);
+  const progressSafe = Number.isFinite(progressValue) ? progressValue : 0;
+
+  const formsForClient = data.forms.map(mapFormForClient);
+  const documentsForClient = mapDocumentsByFormForClient(data.documentsByForm);
+  const assigneesForClient = assignees.map((a) => ({
+    id: String(a.id),
+    name: String(a.name),
+    email: String(a.email),
+  }));
 
   return (
     <div>
@@ -91,21 +129,35 @@ export default async function ContractDetailPage({
           </a>
         )}
 
+        {data.slack_channel_id && data.slack_project_seq != null && (
+          <div className="mt-4">
+            <span className="text-slate-500 text-sm block mb-1">Slack project channel</span>
+            <a
+              href={`https://slack.com/app_redirect?channel=${data.slack_channel_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-400 hover:text-emerald-300 text-sm font-mono"
+            >
+              #{`chi-contract-${String(data.slack_project_seq).padStart(3, '0')}`}
+            </a>
+          </div>
+        )}
+
         <div className="mt-6">
           <span className="text-sm text-slate-500 block mb-2">Progress</span>
-          <ProgressBar value={data.progress} />
+          <ProgressBar value={progressSafe} />
         </div>
       </div>
 
-      {data.sam_data && (
-        <SamDataSection samData={data.sam_data} />
+      {samDataForClient && Object.keys(samDataForClient).length > 0 && (
+        <SamDataSection samData={samDataForClient} />
       )}
 
       <FormsSection
-        contractId={data.id}
-        forms={data.forms}
-        assignees={assignees.map((a) => ({ id: a.id, name: a.name, email: a.email }))}
-        documentsByForm={data.documentsByForm ?? {}}
+        contractId={String(data.id)}
+        forms={formsForClient}
+        assignees={assigneesForClient}
+        documentsByForm={documentsForClient}
       />
     </div>
   );

@@ -10,6 +10,120 @@ function getSlackClient(): WebClient | null {
   return client;
 }
 
+/** Slack channel name: chi-contract-001 (lowercase, hyphens; Slack rules) */
+export function formatSlackProjectChannelName(seq: number): string {
+  return `chi-contract-${String(seq).padStart(3, '0')}`;
+}
+
+/** First post body for a new project channel (mrkdwn). */
+export function buildOpportunitySlackMessage(contract: Contract): string {
+  const blocks: string[] = [];
+  const oppNum = contract.opportunity_number;
+  if (oppNum != null) blocks.push(`*OPPORTUNITY # ${oppNum}:*`);
+  if (contract.sam_notice_id) blocks.push(`*Notice ID:* ${contract.sam_notice_id}`);
+  if (contract.opportunity_type?.trim()) {
+    blocks.push(`*Contract Opportunity Type:* ${contract.opportunity_type.trim()}`);
+  }
+  if (contract.naics?.trim()) blocks.push(`*NAICS:* ${contract.naics.trim()}`);
+  blocks.push(`*Title:* ${contract.title}`);
+  blocks.push(`*Agency:* ${contract.agency}`);
+  const due = new Date(contract.due_date);
+  blocks.push(
+    `*Due:* ${due.toLocaleString('en-US', { timeZone: 'America/Chicago', dateStyle: 'medium', timeStyle: 'short' })} CDT`
+  );
+  if (contract.service_area?.trim()) blocks.push(`*Service Area:* ${contract.service_area.trim()}`);
+  if (contract.prospect_contractors?.trim()) {
+    blocks.push(`*Prospect Contractor:* ${contract.prospect_contractors.trim()}`);
+  }
+  if (contract.sam_url?.trim()) blocks.push(`*Link:* ${contract.sam_url.trim()}`);
+  if (contract.key_personnel?.trim()) {
+    blocks.push('', '*Key Personnel:*', '', contract.key_personnel.trim());
+  }
+  if (contract.equipment_notes?.trim()) {
+    blocks.push(
+      '',
+      '*Possible Equipment Medically Required/Necessary for the type of service:*',
+      '',
+      contract.equipment_notes.trim()
+    );
+  }
+  const body = blocks.join('\n').trim();
+  return body || `*${contract.title}*\n*Agency:* ${contract.agency}`;
+}
+
+export type CreateSlackProjectResult = {
+  channelId: string;
+  threadTs: string;
+};
+
+/**
+ * Create Slack channel Chi_Contract###, invite users, post opportunity message.
+ * Scopes: channels:manage (public) or groups:write (private), channels:join, users:read.email
+ */
+export async function createSlackProjectChannel(
+  contract: Contract,
+  seq: number,
+  inviteEmails: string[]
+): Promise<CreateSlackProjectResult> {
+  const slack = getSlackClient();
+  if (!slack) throw new Error('SLACK_BOT_TOKEN is not set');
+
+  const name = formatSlackProjectChannelName(seq);
+  const isPrivate = process.env.SLACK_PROJECT_CHANNEL_PRIVATE === 'true';
+
+  const createRes = await slack.conversations.create({
+    name,
+    is_private: isPrivate,
+  });
+
+  if (!createRes.ok || !createRes.channel?.id) {
+    throw new Error(
+      `Slack could not create channel "${name}": ${createRes.error ?? 'unknown'}. Add channels:manage (public) or groups:write (private) and reinstall the app.`
+    );
+  }
+
+  const channelId = createRes.channel.id;
+
+  const uniqueEmails = Array.from(
+    new Set(inviteEmails.map((e) => e.trim().toLowerCase()).filter(Boolean))
+  );
+  const userIds: string[] = [];
+  for (const email of uniqueEmails) {
+    try {
+      const lu = await slack.users.lookupByEmail({ email });
+      if (lu.ok && lu.user?.id) userIds.push(lu.user.id);
+    } catch {
+      // skip missing users
+    }
+  }
+
+  if (userIds.length > 0) {
+    await slack.conversations.invite({
+      channel: channelId,
+      users: userIds.join(','),
+    }).catch((err) => {
+      console.warn('[Slack] conversations.invite:', err);
+    });
+  }
+
+  const text = buildOpportunitySlackMessage(contract);
+  const post = await slack.chat.postMessage({
+    channel: channelId,
+    text: `📋 ${contract.title}`,
+    blocks: [
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text },
+      },
+    ],
+  });
+
+  const threadTs = post.ts;
+  if (!threadTs) throw new Error('Slack did not return a message timestamp');
+
+  return { channelId, threadTs };
+}
+
 /** Resolve email to Slack @ mention. Returns <@USER_ID> or the email if lookup fails.
  * Requires Slack app scope: users:read.email (add in api.slack.com → Your App → OAuth & Permissions → Bot Token Scopes) */
 async function getSlackMentionForEmail(slack: WebClient, email: string | null): Promise<string> {
@@ -36,7 +150,7 @@ export async function notifySlackContractCreated(
   notes?: string | null
 ): Promise<{ threadTs: string } | null> {
   const slack = getSlackClient();
-  const channelId = process.env.SLACK_CONTRACT_CHANNEL_ID;
+  const channelId = contract.slack_channel_id ?? process.env.SLACK_CONTRACT_CHANNEL_ID;
   if (!slack || !channelId) return null;
 
   const lines = [
@@ -74,7 +188,9 @@ export async function postToContractThread(
   text: string
 ): Promise<boolean> {
   const slack = getSlackClient();
-  const channelId = process.env.SLACK_CONTRACT_CHANNEL_ID;
+  const { getContractById } = await import('@/lib/db/contracts');
+  const contract = await getContractById(contractId).catch(() => null);
+  const channelId = contract?.slack_channel_id ?? process.env.SLACK_CONTRACT_CHANNEL_ID;
   if (!slack || !channelId) return false;
 
   await slack.chat.postMessage({
@@ -164,9 +280,8 @@ export async function getContractSummaryForSlack(contractId: string): Promise<st
 
 export async function requestFormInSlack(formId: string): Promise<{ ok: boolean; error?: string }> {
   const slack = getSlackClient();
-  const channelId = process.env.SLACK_CONTRACT_CHANNEL_ID;
-  if (!slack || !channelId) {
-    return { ok: false, error: 'Slack is not configured (SLACK_BOT_TOKEN or SLACK_CONTRACT_CHANNEL_ID)' };
+  if (!slack) {
+    return { ok: false, error: 'Slack is not configured (SLACK_BOT_TOKEN)' };
   }
 
   const { getFormById, updateFormSlackRequested } = await import('@/lib/db/forms');
@@ -179,6 +294,15 @@ export async function requestFormInSlack(formId: string): Promise<{ ok: boolean;
 
   const contract = await getContractById(form.contract_id).catch(() => null);
   if (!contract) return { ok: false, error: 'Contract not found' };
+
+  const channelId = contract.slack_channel_id ?? process.env.SLACK_CONTRACT_CHANNEL_ID;
+  if (!channelId) {
+    return {
+      ok: false,
+      error:
+        'No Slack channel for this project. Create a project with Slack channel, or set SLACK_CONTRACT_CHANNEL_ID for legacy.',
+    };
+  }
 
   const docs = await getDocumentsByFormId(formId);
   const docLinks = docs.length
@@ -320,16 +444,20 @@ export async function processSlackMessageForFormCompletion(
   threadTs: string,
   text: string,
   files?: SlackFile[],
-  botToken?: string
+  botToken?: string,
+  slackChannelId?: string
 ): Promise<void> {
-  const { getContractBySlackThreadTs } = await import('@/lib/db/contracts');
+  const { getContractBySlackThreadTs, getContractBySlackChannelId } = await import('@/lib/db/contracts');
   const { getFormsByContractId } = await import('@/lib/db/forms');
   const { updateFormStatus } = await import('@/lib/db/forms');
   const { recalculateAndPersistProgress } = await import('@/lib/business/progress');
 
-  const contract = await getContractBySlackThreadTs(threadTs);
+  let contract = slackChannelId ? await getContractBySlackChannelId(slackChannelId) : null;
   if (!contract) {
-    console.log('[Slack] No contract found for thread_ts:', threadTs);
+    contract = await getContractBySlackThreadTs(threadTs);
+  }
+  if (!contract) {
+    console.log('[Slack] No contract found for channel:', slackChannelId, 'thread_ts:', threadTs);
     return;
   }
 

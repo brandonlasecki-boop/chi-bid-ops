@@ -1,10 +1,13 @@
 import Link from 'next/link';
 import { createContractAction } from '@/app/actions/contracts';
-
-export const dynamic = 'force-dynamic';
+import { fetchAssigneesAction } from '@/app/actions/assignees';
 import { CreateContractForm } from '@/components/contracts/CreateContractForm';
 
-export default function NewContractPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function NewContractPage() {
+  const assignees = await fetchAssigneesAction().catch(() => []);
+
   return (
     <div>
       <Link
@@ -14,11 +17,12 @@ export default function NewContractPage() {
         ← Back
       </Link>
 
-      <div className="max-w-xl">
-        <h1 className="text-2xl font-semibold text-slate-100 mb-6">
-          New Contract
-        </h1>
-        <CreateContractForm action={createContractAction} />
+      <div className="max-w-3xl">
+        <h1 className="text-2xl font-semibold text-slate-100 mb-6">New project / contract</h1>
+        <CreateContractForm
+          action={createContractAction}
+          assignees={assignees.map((a) => ({ id: a.id, name: a.name, email: a.email }))}
+        />
       </div>
     </div>
   );

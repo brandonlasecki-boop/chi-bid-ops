@@ -126,7 +126,8 @@ export async function POST(req: NextRequest) {
           ev.thread_ts,
           ev.text ?? '',
           evFiles,
-          token
+          token,
+          ev.channel
         );
         console.log('[Slack] Processed:', ev.thread_ts, ev.text?.slice(0, 50));
       } catch (err) {
